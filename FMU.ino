@@ -3,12 +3,12 @@
 #define LED_PIN 13
 #define MOTOR_1_PIN 3
 #define MOTOR_2_PIN 4
-#define MOTOR_3_PIN 5
-#define MOTOR_4_PIN 6
+#define MOTOR_3_PIN 20
+#define MOTOR_4_PIN 21
 
 #define CALIBRATE_ESC
-#define THROTTLE_MIN 0
-#define THROTTLE_MAX 179
+#define THROTTLE_MIN 700
+#define THROTTLE_MAX 2000
 
 boolean LED_STATUS = false;
 int throttle = 0;
@@ -26,10 +26,10 @@ void calibrateESC()
 {
     throttle = THROTTLE_MAX;
 
-    motor[0].write(throttle);
-    motor[1].write(throttle);
-    motor[2].write(throttle);
-    motor[3].write(throttle);
+    motor[0].writeMicroseconds(THROTTLE_MAX);
+    motor[1].writeMicroseconds(THROTTLE_MAX);
+    motor[2].writeMicroseconds(THROTTLE_MAX);
+    motor[3].writeMicroseconds(THROTTLE_MAX);
 
     LED_STATUS = true;
     for (int i = 0; i < 15; i++) {
@@ -43,11 +43,10 @@ void calibrateESC()
         delay(100);
     }
 
-    throttle = THROTTLE_MIN;
-    motor[0].write(throttle);
-    motor[1].write(throttle);
-    motor[2].write(throttle);
-    motor[3].write(throttle);
+    motor[0].writeMicroseconds(THROTTLE_MIN);
+    motor[1].writeMicroseconds(THROTTLE_MIN);
+    motor[2].writeMicroseconds(THROTTLE_MIN);
+    motor[3].writeMicroseconds(THROTTLE_MIN);
     
     LED_STATUS = true;
     for (int i = 0; i < 25; i++) {
@@ -82,7 +81,9 @@ void loop()
 {
     throttle = 30;
     motor[0].write(throttle);
-    Serial.println(throttle, DEC);
+    motor[1].write(throttle);
+    motor[2].write(throttle);
+    motor[3].write(throttle);
     delay(15);
 }
 
