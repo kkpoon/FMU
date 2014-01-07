@@ -1,3 +1,4 @@
+#include <RCSwitch.h>
 #include <Servo.h>
 #include <Wire.h>
 
@@ -5,6 +6,7 @@
 #include "MPU6050.h"
 
 #define LED_PIN 13
+#define RF_TRAN 14
 
 #define ALPHA 0.5
 #define MPU6050_SENS_2G 16384
@@ -24,7 +26,7 @@
 #define MOTOR_3_PIN 20
 #define MOTOR_4_PIN 21
 
-#define CALIBRATE_ESC
+//#define CALIBRATE_ESC
 #define THROTTLE_MIN 1000
 #define THROTTLE_MAX 2000
 
@@ -45,7 +47,10 @@ int throttle = 0;
 int motor_throttle[MOTORS];
 Servo motor[MOTORS];
 
+RCSwitch transmitter = RCSwitch();
+
 elapsedMillis since;
+elapsedMillis sendDataInterval;
 
 void blinkTimeout(int seconds, int freq)
 {
@@ -133,10 +138,10 @@ void calibrateESC()
 void setupESC()
 {
     Serial.println("Initialize ESC");
-    motor[0].attach(MOTOR_1_PIN);
-    motor[1].attach(MOTOR_2_PIN);
-    motor[2].attach(MOTOR_3_PIN);
-    motor[3].attach(MOTOR_4_PIN);
+    motor[0].attach(MOTOR_1_PIN, THROTTLE_MIN, THROTTLE_MAX);
+    motor[1].attach(MOTOR_2_PIN, THROTTLE_MIN, THROTTLE_MAX);
+    motor[2].attach(MOTOR_3_PIN, THROTTLE_MIN, THROTTLE_MAX);
+    motor[3].attach(MOTOR_4_PIN, THROTTLE_MIN, THROTTLE_MAX);
     
     #ifdef CALIBRATE_ESC
         Serial.println("Calibrate ESC");
@@ -174,6 +179,13 @@ void updateValue()
     }
 }
 
+void sendData()
+{
+    //transmitter.send("ax");
+    transmitter.send(ac[0], 16);
+    //transmitter.send("#");
+}
+
 void setup()
 {
     Wire.begin();
@@ -184,10 +196,13 @@ void setup()
     
     setupMPU();
     setupESC();
+
+    transmitter.enableTransmit(RF_TRAN);
     
     LED_STATUS = true;
     digitalWrite(LED_PIN, LED_STATUS);
     since = 0;
+    sendDataInterval = 0;
 }
 
 void loop()
@@ -197,8 +212,12 @@ void loop()
     calculateData();
     
     if (since > 200) {
-        balance();
+        //balance();
         since = 0;
+    }
+    if (sendDataInterval > 1000) {
+        sendData();
+        sendDataInterval = 0;
     }
     updateValue();
     for (int i = 0; i < MOTORS; i++) {
@@ -232,6 +251,6 @@ void loop()
     Serial.print("    ");
     Serial.print(sensor_temperature);
     Serial.println("");
-    delay(200);
+    delay(20);
 }
 
