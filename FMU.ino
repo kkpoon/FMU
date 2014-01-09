@@ -1,12 +1,20 @@
-#include <RCSwitch.h>
 #include <Servo.h>
 #include <Wire.h>
+#include <Ping.h>
 
 #include "I2Cdev.h"
 #include "MPU6050.h"
 
+#define MAX_DISTANCE 250
+#define CONTROL_MIN 1000
+#define CONTROL_MAX 2000
+#define CONTROL_25P 1250
+#define CONTROL_75P 1750
+#define MAX_PLAY_TIME 60000
+
 #define LED_PIN 13
-#define RF_TRAN 14
+#define TRIGGER_PIN 11
+#define ECHO_PIN 12
 
 #define ALPHA 0.5
 #define MPU6050_SENS_2G 16384
@@ -20,15 +28,10 @@
 #define MPU6050_GYRO_OFFSET_Y -22
 #define MPU6050_GYRO_OFFSET_Z 4
 
-#define MOTORS 4
-#define MOTOR_1_PIN 3
-#define MOTOR_2_PIN 4
-#define MOTOR_3_PIN 20
-#define MOTOR_4_PIN 21
-
-//#define CALIBRATE_ESC
-#define THROTTLE_MIN 1000
-#define THROTTLE_MAX 2000
+#define AIL_PIN 3
+#define ELE_PIN 4
+#define THR_PIN 5
+#define RUD_PIN 6
 
 boolean LED_STATUS = false;
 
@@ -43,20 +46,26 @@ float pitch;
 float roll;
 float yaw;
 
-int throttle = 0;
-int motor_throttle[MOTORS];
-Servo motor[MOTORS];
+int near_ground_height = 0;
+int last_near_ground_height = 0;
+double velocity[3];
+int z_movement = 0;
 
-RCSwitch transmitter = RCSwitch();
+Servo ail;
+Servo ele;
+Servo thr;
+Servo rud;
+
+int throttle = CONTROL_MIN;
 
 elapsedMillis since;
-elapsedMillis sendDataInterval;
+elapsedMillis lastSensorRead;
 
 void blinkTimeout(int seconds, int freq)
 {
     int cycle = seconds * freq * 2;
     int timeout = 1000 / freq / 2;
-    
+
     LED_STATUS = true;
     for (int i = 0; i < cycle; i++) {
         digitalWrite(LED_PIN, LED_STATUS);
@@ -68,6 +77,13 @@ void blinkTimeout(int seconds, int freq)
 void readSensors() {
     mpu6050.getMotion6(&ac[0], &ac[1], &ac[2], &av[0], &av[1], &av[2]);
     sensor_temperature = (mpu6050.getTemperature() + 12412) / 340;
+
+    digitalWrite(TRIGGER_PIN, LOW);
+    delayMicroseconds(2);
+    digitalWrite(TRIGGER_PIN, HIGH);
+    delayMicroseconds(10);
+    digitalWrite(TRIGGER_PIN, LOW);   
+    near_ground_height = pulseIn(ECHO_PIN, HIGH, 100000) / 58;
 }
 
 void adjustData() {
@@ -77,18 +93,28 @@ void adjustData() {
     av[0] = av[0] + MPU6050_GYRO_OFFSET_X;
     av[1] = av[1] + MPU6050_GYRO_OFFSET_Y;
     av[2] = av[2] + MPU6050_GYRO_OFFSET_Z;
+
+    if (near_ground_height <= 0 || near_ground_height > MAX_DISTANCE) {
+        near_ground_height = -1;
+    }
 }
 
 void calculateData() {
     int norm = 0;
     for (int i = 0; i < 3; i++) {
-        norm = map(ac[i], -MPU6050_SENS_2G, MPU6050_SENS_2G, -1000, 1000) * ALPHA + 
-            g[i] * 1000 * (1.0 - ALPHA);
+        norm = map(ac[i], -MPU6050_SENS_2G, MPU6050_SENS_2G, -1000, 1000) * ALPHA + g[i] * 1000 * (1.0 - ALPHA);
         g[i] = constrain(norm, -1000, 1000) / 1000.0;
     }
 
     pitch = -atan2(g[0], g[2]);
     roll = atan2(g[1], g[2]);
+
+    if (near_ground_height > 0 && near_ground_height <= MAX_DISTANCE) {
+        velocity[2] = (near_ground_height - last_near_ground_height) * 10.0 / lastSensorRead * ALPHA + velocity[2] * (1.0 - ALPHA);
+    } 
+    else {
+        velocity[2] = -343.2;
+    }
 }
 
 void setupMPU()
@@ -98,14 +124,14 @@ void setupMPU()
     // verify connection
     Serial.println("Testing device connections...");
     Serial.println(mpu6050.testConnection() ? "MPU6050 connection successful" : "MPU6050 connection failed");
-    
+
     mpu6050.setFullScaleGyroRange(MPU6050_GYRO_FS_2000);
     mpu6050.setFullScaleAccelRange(MPU6050_ACCEL_FS_2);
 
     mpu6050.setXAccelOffset(0);
     mpu6050.setYAccelOffset(0);
     mpu6050.setZAccelOffset(0);
-    
+
     mpu6050.setXGyroOffset(0);
     mpu6050.setYGyroOffset(0);
     mpu6050.setZGyroOffset(0);
@@ -118,91 +144,83 @@ void setupMPU()
     }
 }
 
-// ESC functions
-void calibrateESC()
+void setupFCU()
 {
-    for (int i = 0; i < MOTORS; i++) {
-        motor[i].writeMicroseconds(THROTTLE_MAX);
-    }
+    ail.attach(AIL_PIN, CONTROL_MIN, CONTROL_MAX);
+    ele.attach(ELE_PIN, CONTROL_MIN, CONTROL_MAX);
+    thr.attach(THR_PIN, CONTROL_MIN, CONTROL_MAX);
+    rud.attach(RUD_PIN, CONTROL_MIN, CONTROL_MAX);
 
-    blinkTimeout(5, 2);
+    // init centered ail ele rud, min thr
+    ail.writeMicroseconds((CONTROL_MAX + CONTROL_MIN) / 2);
+    ele.writeMicroseconds((CONTROL_MAX + CONTROL_MIN) / 2);
+    thr.writeMicroseconds(CONTROL_MIN);
+    rud.writeMicroseconds((CONTROL_MAX + CONTROL_MIN) / 2);
+
+    // trigger unlock
+    blinkTimeout(10, 10);
+    ail.writeMicroseconds((CONTROL_MAX + CONTROL_MIN) / 2);
+    ele.writeMicroseconds((CONTROL_MAX + CONTROL_MIN) / 2);
+    thr.writeMicroseconds(CONTROL_MIN);
+    rud.writeMicroseconds(CONTROL_MAX);
+    blinkTimeout(5, 1);
+    ail.writeMicroseconds((CONTROL_MAX + CONTROL_MIN) / 2);
+    ele.writeMicroseconds((CONTROL_MAX + CONTROL_MIN) / 2);
+    thr.writeMicroseconds(CONTROL_MIN);
+    rud.writeMicroseconds((CONTROL_MAX + CONTROL_MIN) / 2);
     blinkTimeout(5, 10);
-    
-    for (int i = 0; i < MOTORS; i++) {
-        motor[i].writeMicroseconds(THROTTLE_MIN);
-    }
-    
-    blinkTimeout(10, 2);
 }
 
-void setupESC()
+void updateThrottle()
 {
-    Serial.println("Initialize ESC");
-    motor[0].attach(MOTOR_1_PIN, THROTTLE_MIN, THROTTLE_MAX);
-    motor[1].attach(MOTOR_2_PIN, THROTTLE_MIN, THROTTLE_MAX);
-    motor[2].attach(MOTOR_3_PIN, THROTTLE_MIN, THROTTLE_MAX);
-    motor[3].attach(MOTOR_4_PIN, THROTTLE_MIN, THROTTLE_MAX);
-    
-    #ifdef CALIBRATE_ESC
-        Serial.println("Calibrate ESC");
-        calibrateESC();
-    #endif
-    
-    for (int i = 0; i < MOTORS; i++) {
-        motor[i].writeMicroseconds(THROTTLE_MIN);
-    }
-    
-    Serial.println("ESC ready in 5s");
-    blinkTimeout(5, 2);
-    Serial.println("ESC ready");
+    thr.writeMicroseconds(throttle);
 }
 
-// TODO balance based on Accelerometer, now just for testing
-void balance()
+void holdAt(int distance_cm)
 {
-    motor_throttle[0] = motor_throttle[0] > 0 ? motor_throttle[0] - 1 : 0;
-    motor_throttle[1] = motor_throttle[1] > 0 ? motor_throttle[1] - 1 : 0;
-    motor_throttle[2] = motor_throttle[2] > 0 ? motor_throttle[2] - 1 : 0;
-    motor_throttle[3] = motor_throttle[3] > 0 ? motor_throttle[3] - 1 : 0;
-}
-
-// TODO to be removed
-void updateValue()
-{
-    if(Serial.available()) {
-        int t = Serial.parseInt();
-        if (t > 0) {
-            for (int i = 0; i < MOTORS; i++) {
-                motor_throttle[i] = t;
-            }
+    int adjValue = 0;
+    if (near_ground_height < distance_cm) {
+        if (velocity[2] <= 0) {
+            throttle += map(distance_cm - near_ground_height, 1, 50, 10, 100);
+        }
+    } 
+    else if (near_ground_height > distance_cm) {
+        if (velocity[2] >= 0) {
+            throttle -= map(near_ground_height - distance_cm, 1, 50, 10, 100);
         }
     }
+    throttle += constrain(adjValue, 10, 100);
+    throttle = constrain(throttle, CONTROL_25P, CONTROL_75P);
+    updateThrottle();
 }
 
-void sendData()
+void land(int seconds)
 {
-    //transmitter.send("ax");
-    transmitter.send(ac[0], 16);
-    //transmitter.send("#");
+    int diff = throttle - CONTROL_MIN;
+    while(throttle > CONTROL_MIN) {
+        if (velocity[2] >= 0) {
+            throttle -= 100;
+        }
+        updateThrottle();
+        delay(seconds * 1000 / diff);
+    }
 }
 
 void setup()
 {
     Wire.begin();
     Serial.begin(38400);
-    
+    pinMode(TRIGGER_PIN, OUTPUT);
+    pinMode(ECHO_PIN,INPUT);
     pinMode(LED_PIN, OUTPUT);
     digitalWrite(LED_PIN, true);
-    
-    setupMPU();
-    setupESC();
 
-    transmitter.enableTransmit(RF_TRAN);
-    
+    setupMPU();
+    setupFCU();
+
     LED_STATUS = true;
     digitalWrite(LED_PIN, LED_STATUS);
     since = 0;
-    sendDataInterval = 0;
 }
 
 void loop()
@@ -210,47 +228,43 @@ void loop()
     readSensors();
     adjustData();
     calculateData();
-    
-    if (since > 200) {
-        //balance();
-        since = 0;
+
+    lastSensorRead = 0;
+
+    if (since > MAX_PLAY_TIME) {
+        land(10);
+    } 
+    else {
+        holdAt(30);
+
+        Serial.print(ac[0]);
+        Serial.print(",");
+        Serial.print(ac[1]);
+        Serial.print(",");
+        Serial.print(ac[2]);
+        Serial.print("    ");
+        Serial.print(av[0]);
+        Serial.print(",");
+        Serial.print(av[1]);
+        Serial.print(",");
+        Serial.print(av[2]);
+        Serial.print("    ");
+        Serial.print(g[0]);
+        Serial.print(",");
+        Serial.print(g[1]);
+        Serial.print(",");
+        Serial.print(g[2]);
+        Serial.print("    ");
+        Serial.print(sensor_temperature);
+        Serial.print("    ");
+        Serial.print(near_ground_height / 58);
+        Serial.print("    ");
+        Serial.print(throttle);
+        Serial.print("    ");
+        Serial.print(z_movement);
+        Serial.println("");
     }
-    if (sendDataInterval > 1000) {
-        sendData();
-        sendDataInterval = 0;
-    }
-    updateValue();
-    for (int i = 0; i < MOTORS; i++) {
-        motor[i].write(motor_throttle[i]);
-    }
-    
-    for (int i = 0; i < MOTORS; i++) {
-        Serial.print("Motor[");
-        Serial.print(i);
-        Serial.print("] = ");
-        Serial.println(motor_throttle[i]);
-    }
-    
-    Serial.print(ac[0]);
-    Serial.print(",");
-    Serial.print(ac[1]);
-    Serial.print(",");
-    Serial.print(ac[2]);
-    Serial.print("    ");
-    Serial.print(av[0]);
-    Serial.print(",");
-    Serial.print(av[1]);
-    Serial.print(",");
-    Serial.print(av[2]);
-    Serial.print("    ");
-    Serial.print(g[0]);
-    Serial.print(",");
-    Serial.print(g[1]);
-    Serial.print(",");
-    Serial.print(g[2]);
-    Serial.print("    ");
-    Serial.print(sensor_temperature);
-    Serial.println("");
     delay(20);
 }
+
 
