@@ -10,6 +10,14 @@
 #include <I2Cdev.h>
 #include <MPU6050_6Axis_MotionApps20.h>
 
+// MPU6050 offset, calibrate by CalibrateMPU6050 project
+#define MPU6050_ACCEL_OFFSET_X -773
+#define MPU6050_ACCEL_OFFSET_Y 3278
+#define MPU6050_ACCEL_OFFSET_Z 1660
+#define MPU6050_GYRO_OFFSET_X -24
+#define MPU6050_GYRO_OFFSET_Y -62
+#define MPU6050_GYRO_OFFSET_Z -6
+
 #define MAX_DISTANCE 250
 #define MAX_PLAY_TIME 60000
 
@@ -24,13 +32,10 @@
 
 #define ALPHA 0.5
 
-boolean LED_STATUS = false;
-
 KKMulticopterBoard kkboard(AIL_PIN, ELE_PIN, THR_PIN, RUD_PIN);
 UltraSonicProximity usProximity(TRIGGER_PIN, ECHO_PIN);
 
 MPU6050 mpu;
-bool dmpReady = false;  // set true if DMP init was successful
 uint8_t mpuIntStatus;   // holds actual interrupt status byte from MPU
 uint8_t devStatus;      // return status after each device operation (0 = success, !0 = error)
 uint16_t packetSize;    // expected DMP packet size (default is 42 bytes)
@@ -41,10 +46,14 @@ VectorInt16 aa;         // [x, y, z]            accel sensor measurements
 VectorInt16 aaReal;     // [x, y, z]            gravity-free accel sensor measurements
 VectorInt16 aaWorld;    // [x, y, z]            world-frame accel sensor measurements
 VectorFloat gravity;    // [x, y, z]            gravity vector
-int32_t gg[3];       // [x, y, z]            gyro sensor measurements
+int16_t gg[3];       // [x, y, z]            gyro sensor measurements
 float euler[3];         // [psi, theta, phi]    Euler angle container
 float ypr[3];           // [yaw, pitch, roll]   yaw/pitch/roll container and gravity vector
 int16_t sensor_temperature;
+volatile bool mpuInterrupt = false;     // indicates whether MPU interrupt pin has gone high
+void dmpDataReady() {
+    mpuInterrupt = true;
+}
 
 int near_ground_height = 0;
 int last_near_ground_height = 0;
@@ -54,60 +63,65 @@ int throttle;
 
 unsigned long since = millis();
 unsigned long lastSensorRead = millis();
+unsigned long lastPrint = millis();
 
-volatile bool mpuInterrupt = false;     // indicates whether MPU interrupt pin has gone high
-void dmpDataReady() {
-    mpuInterrupt = true;
-}
-
-
-void setupMPU()
+boolean setupMPU()
 {
     mpu.initialize();
-    delay(1000);
+    if (!mpu.testConnection()) {
+        return false
+    }
     devStatus = mpu.dmpInitialize();
-
-    // verify connection
-    Serial.println("Testing device connections...");
-    Serial.println(mpu.testConnection() ? "MPU6050 connection successful" : "MPU6050 connection failed");
 
     mpu.setFullScaleGyroRange(MPU6050_GYRO_FS_2000);
     mpu.setFullScaleAccelRange(MPU6050_ACCEL_FS_2);
+
+    mpu.setXAccelOffset(MPU6050_ACCEL_OFFSET_X);
+    mpu.setYAccelOffset(MPU6050_ACCEL_OFFSET_Y);
+    mpu.setZAccelOffset(MPU6050_ACCEL_OFFSET_Z);
+    mpu.setXGyroOffset(MPU6050_GYRO_OFFSET_X);
+    mpu.setYGyroOffset(MPU6050_GYRO_OFFSET_Y);
+    mpu.setZGyroOffset(MPU6050_GYRO_OFFSET_Z);
     
     if (devStatus == 0) {
         mpu.setDMPEnabled(true);
-        pinMode(20, INPUT);
+        pinMode(MPU6050_INT_PIN, INPUT);
         attachInterrupt(MPU6050_INT_PIN, dmpDataReady, RISING);
         mpuIntStatus = mpu.getIntStatus();
-        dmpReady = true;
         packetSize = mpu.dmpGetFIFOPacketSize();
     } else {
-        while(true) {
-            blinkTimeout(1, 2);
-        }
+        return false;
     }
+    return true;
 }
 
 void setup()
 {
-    #if I2CDEV_IMPLEMENTATION == I2CDEV_ARDUINO_WIRE
-        Wire.begin();
-        TWBR = 24; // 400kHz I2C clock (200kHz if CPU is 8MHz)
-    #elif I2CDEV_IMPLEMENTATION == I2CDEV_BUILTIN_FASTWIRE
-        Fastwire::setup(400, true);
-    #endif
+#if I2CDEV_IMPLEMENTATION == I2CDEV_ARDUINO_WIRE
+    Wire.begin();
+#elif I2CDEV_IMPLEMENTATION == I2CDEV_BUILTIN_FASTWIRE
+    Fastwire::setup(400, true);
+#endif
     Serial.begin(38400);
     pinMode(LED_PIN, OUTPUT);
     digitalWrite(LED_PIN, true);
 
-    setupMPU();
+    Serial.println("Setup MPU");
+    if (!setupMPU()) {
+        Serial.println("MPU6050 failed initialization");
+        digitalWrite(LED_PIN, false);
+        while (true) delay(100000);
+    }
+
+    Serial.println("Setup Flight Board");
     blinkTimeout(5, 10);
+    digitalWrite(LED_PIN, false);
     kkboard.arm();
     blinkTimeout(5, 10);
     kkboard.idle();
 
-    LED_STATUS = true;
-    digitalWrite(LED_PIN, LED_STATUS);
+    Serial.println("Ready");
+    digitalWrite(LED_PIN, true);
     since = millis();
 }
 
@@ -124,19 +138,21 @@ void loop()
     else {
         //holdAt(30);
     }
-    //printData();
-    delay(20);
+    if (millis() - lastPrint > 200) {
+        printData();
+        lastPrint = millis();
+    }
 }
 
 //========== Sensor data functions ==========
 void readSensors() {
-    while (!mpuInterrupt && fifoCount < packetSize);
+    while (!mpuInterrupt && !mpu.dmpPacketAvailable());
     mpuInterrupt = false;
     mpuIntStatus = mpu.getIntStatus();
     fifoCount = mpu.getFIFOCount();
     if ((mpuIntStatus & 0x10) || fifoCount == 1024) {
         mpu.resetFIFO();
-        Serial.println(F("FIFO overflow!"));
+        Serial.println("FIFO overflow!");
     } else if (mpuIntStatus & 0x02) {
         while (fifoCount < packetSize) fifoCount = mpu.getFIFOCount();
         mpu.getFIFOBytes(fifoBuffer, packetSize);
@@ -224,29 +240,27 @@ double complementary_filter(double current, double last, float factor)
 
 void printData()
 {
-    Serial.print(aa.x);
-    Serial.print(",");
-    Serial.print(aa.y);
-    Serial.print(",");
-    Serial.print(aa.z);
-    Serial.print("    ");
-    Serial.print(gg[0]);
-    Serial.print(",");
-    Serial.print(gg[1]);
-    Serial.print(",");
-    Serial.print(gg[2]);
-    Serial.print("    ");
-    Serial.print(gravity.x);
-    Serial.print(",");
-    Serial.print(gravity.y);
-    Serial.print(",");
-    Serial.print(gravity.z);
-    Serial.print("    ");
-    Serial.print(sensor_temperature);
-    Serial.print("    ");
-    Serial.print(near_ground_height / 58);
-    Serial.print("    ");
-    Serial.print(throttle);
+    Serial.print(sensor_temperature); Serial.print("\t");
+    Serial.print(aa.x); Serial.print("\t");
+    Serial.print(aa.y); Serial.print("\t");
+    Serial.print(aa.z); Serial.print("\t");
+    Serial.print(gg[0]); Serial.print("\t");
+    Serial.print(gg[1]); Serial.print("\t");
+    Serial.print(gg[2]); Serial.print("\t");
+    Serial.print(gravity.x); Serial.print("\t");
+    Serial.print(gravity.y); Serial.print("\t");
+    Serial.print(gravity.z); Serial.print("\t");
+    Serial.print(aaReal.x); Serial.print("\t");
+    Serial.print(aaReal.y); Serial.print("\t");
+    Serial.print(aaReal.z); Serial.print("\t");
+    Serial.print(aaWorld.x); Serial.print("\t");
+    Serial.print(aaWorld.y); Serial.print("\t");
+    Serial.print(aaWorld.z); Serial.print("\t");
+    Serial.print(degrees(ypr[0])); Serial.print("\t");
+    Serial.print(degrees(ypr[1])); Serial.print("\t");
+    Serial.print(degrees(ypr[2])); Serial.print("\t");
+    Serial.print(near_ground_height / 58); Serial.print("\t");
+    Serial.print(throttle); Serial.print("\t");
     Serial.println("");
 }
 
