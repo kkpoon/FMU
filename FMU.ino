@@ -69,7 +69,7 @@ boolean setupMPU()
 {
     mpu.initialize();
     if (!mpu.testConnection()) {
-        return false
+        return false;
     }
     devStatus = mpu.dmpInitialize();
 
@@ -220,7 +220,7 @@ void blinkTimeout(int seconds, int freq)
     int cycle = seconds * freq * 2;
     int timeout = 1000 / freq / 2;
 
-    LED_STATUS = true;
+    boolean LED_STATUS = true;
     for (int i = 0; i < cycle; i++) {
         digitalWrite(LED_PIN, LED_STATUS);
         LED_STATUS = !LED_STATUS;
