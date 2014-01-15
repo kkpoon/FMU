@@ -1,0 +1,47 @@
+void printData()
+{
+    Serial.print(sensor_temperature); 
+    Serial.print("\t");
+    Serial.print(aa.x); 
+    Serial.print("\t");
+    Serial.print(aa.y); 
+    Serial.print("\t");
+    Serial.print(aa.z); 
+    Serial.print("\t");
+    Serial.print(gg[0]); 
+    Serial.print("\t");
+    Serial.print(gg[1]); 
+    Serial.print("\t");
+    Serial.print(gg[2]); 
+    Serial.print("\t");
+    Serial.print(gravity.x); 
+    Serial.print("\t");
+    Serial.print(gravity.y); 
+    Serial.print("\t");
+    Serial.print(gravity.z); 
+    Serial.print("\t");
+    Serial.print(aaReal.x); 
+    Serial.print("\t");
+    Serial.print(aaReal.y); 
+    Serial.print("\t");
+    Serial.print(aaReal.z); 
+    Serial.print("\t");
+    Serial.print(aaWorld.x); 
+    Serial.print("\t");
+    Serial.print(aaWorld.y); 
+    Serial.print("\t");
+    Serial.print(aaWorld.z); 
+    Serial.print("\t");
+    Serial.print(degrees(ypr[0])); 
+    Serial.print("\t");
+    Serial.print(degrees(ypr[1])); 
+    Serial.print("\t");
+    Serial.print(degrees(ypr[2])); 
+    Serial.print("\t");
+    Serial.print(near_ground_height / 58); 
+    Serial.print("\t");
+    Serial.print(throttle); 
+    Serial.print("\t");
+    Serial.println("");
+}
+
