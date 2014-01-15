@@ -1,6 +1,6 @@
 void printData()
 {
-    Serial.print(sensor_temperature); 
+    Serial.print(mpuTemp); 
     Serial.print("\t");
     Serial.print(aa.x); 
     Serial.print("\t");
