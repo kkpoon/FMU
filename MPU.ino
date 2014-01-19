@@ -16,6 +16,14 @@ uint8_t fifoBuffer[64]; // FIFO storage buffer
 volatile bool mpuInterrupt = false;     // indicates whether MPU interrupt pin has gone high
 
 int16_t mpuTemp;
+Quaternion  q;          // [w, x, y, z]         quaternion container
+VectorInt16 aa;         // [x, y, z]            accel sensor measurements
+VectorInt16 aaReal;     // [x, y, z]            gravity-free accel sensor measurements
+VectorInt16 aaWorld;    // [x, y, z]            world-frame accel sensor measurements
+VectorFloat gravity;    // [x, y, z]            gravity vector
+int16_t     gg[3];      // [x, y, z]            gyro sensor measurements
+float       euler[3];   // [psi, theta, phi]    Euler angle container
+float       ypr[3];     // [yaw, pitch, roll]   yaw/pitch/roll container and gravity vector
 
 void dmpDataReady() {
     mpuInterrupt = true;
@@ -76,4 +84,32 @@ void readMPU()
         mpu.dmpGetLinearAccelInWorld(&aaWorld, &aaReal, &q);
     }
     mpuTemp = (mpu.getTemperature() + 12412) / 340;
+    fillMPU6050Data();
+}
+
+void fillMPU6050Data()
+{
+    mpu6050Data.temperature = mpuTemp;
+    mpu6050Data.accelReal[0] = aaReal.x;
+    mpu6050Data.accelReal[1] = aaReal.y;
+    mpu6050Data.accelReal[2] = aaReal.z;
+    mpu6050Data.accelWorld[0] = aaWorld.x;
+    mpu6050Data.accelWorld[1] = aaWorld.y;
+    mpu6050Data.accelWorld[2] = aaWorld.z;
+    mpu6050Data.motion.accel[0] = aa.x;
+    mpu6050Data.motion.accel[1] = aa.y;
+    mpu6050Data.motion.accel[2] = aa.z;
+    mpu6050Data.motion.gravity[0] = gravity.x;
+    mpu6050Data.motion.gravity[1] = gravity.y;
+    mpu6050Data.motion.gravity[2] = gravity.z;
+    for (int i = 0; i < 3; i++) {
+        mpu6050Data.orientation.euler[i] = euler[i];
+        mpu6050Data.orientation.ypr[i] = ypr[i];
+        mpu6050Data.motion.gyro[i] = gg[i];
+    }
+    mpu6050Data.orientation.quaternion[0] = q.w;
+    mpu6050Data.orientation.quaternion[1] = q.x;
+    mpu6050Data.orientation.quaternion[2] = q.y;
+    mpu6050Data.orientation.quaternion[3] = q.z;
+    
 }

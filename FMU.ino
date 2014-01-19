@@ -5,14 +5,15 @@
 #include <Wire.h>
 #endif
 
-#include <UltraSonicProximity.h>
-#include <KKMulticopterBoard.h>
+#include "UltraSonicProximity.h"
+#include "KKMulticopterBoard.h"
 
-#include <I2Cdev.h>
-#include <MPU6050_6Axis_MotionApps20.h>
-#include <nRF24L01.h>
-#include <RF24.h>
-#include "SensorData.h"
+#include "I2Cdev.h"
+#include "MPU6050_6Axis_MotionApps20.h"
+#include "nRF24L01.h"
+#include "RF24.h"
+#include "RF24Carrier.h"
+#include "RF24DataHandler.h"
 
 #define AIL_PIN         3
 #define ELE_PIN         4
@@ -31,14 +32,7 @@
 
 KKMulticopterBoard  kkboard(AIL_PIN, ELE_PIN, THR_PIN, RUD_PIN);
 
-Quaternion  q;          // [w, x, y, z]         quaternion container
-VectorInt16 aa;         // [x, y, z]            accel sensor measurements
-VectorInt16 aaReal;     // [x, y, z]            gravity-free accel sensor measurements
-VectorInt16 aaWorld;    // [x, y, z]            world-frame accel sensor measurements
-VectorFloat gravity;    // [x, y, z]            gravity vector
-int16_t     gg[3];      // [x, y, z]            gyro sensor measurements
-float       euler[3];   // [psi, theta, phi]    Euler angle container
-float       ypr[3];     // [yaw, pitch, roll]   yaw/pitch/roll container and gravity vector
+MPU6050Data mpu6050Data;
 
 int         near_ground_height = 0;
 int         last_near_ground_height = 0;
