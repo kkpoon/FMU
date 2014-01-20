@@ -26,4 +26,5 @@ void print()
     Serial.print(mpu6050Data.orientation.quaternion[2]); Serial.print("\t");
     Serial.print(mpu6050Data.orientation.quaternion[3]); Serial.print("\t");
     Serial.print(mpu6050Data.temperature);
+    Serial.println("");
 }

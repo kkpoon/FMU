@@ -79,6 +79,7 @@ void readMPU()
         mpu.dmpGetAccel(&aa, fifoBuffer);
         mpu.dmpGetGyro(gg, fifoBuffer);
         mpu.dmpGetGravity(&gravity, &q);
+        mpu.dmpGetEuler(euler, &q);
         mpu.dmpGetYawPitchRoll(ypr, &q, &gravity);
         mpu.dmpGetLinearAccel(&aaReal, &aa, &gravity);
         mpu.dmpGetLinearAccelInWorld(&aaWorld, &aaReal, &q);

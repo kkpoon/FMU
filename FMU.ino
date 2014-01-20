@@ -13,17 +13,19 @@
 #include "nRF24L01.h"
 #include "RF24.h"
 #include "RF24Carrier.h"
-#include "RF24DataHandler.h"
+#include "SensorData.h"
 
 #define AIL_PIN         3
 #define ELE_PIN         4
 #define THR_PIN         5
 #define RUD_PIN         6
+#define TRIGGER_PIN     7
+#define ECHO_PIN        8
 #define RF24_CE_PIN     9
 #define RF24_CSN_PIN    10
-#define TRIGGER_PIN     11
-#define ECHO_PIN        12
-#define LED_PIN         14
+#define B_LED_PIN         14
+#define G_LED_PIN         15
+#define R_LED_PIN         16
 #define MPU6050_INT_PIN 20
 
 #define ALPHA         0.5
@@ -45,6 +47,7 @@ unsigned long lastSendRF24 = millis();
 
 void setup()
 {
+    delay(5000);
 #if I2CDEV_IMPLEMENTATION == I2CDEV_ARDUINO_WIRE
     Wire.begin();
 #elif I2CDEV_IMPLEMENTATION == I2CDEV_BUILTIN_FASTWIRE
@@ -52,8 +55,10 @@ void setup()
 #endif
     Serial.begin(38400);
     
-    pinMode(LED_PIN, OUTPUT);
-    digitalWrite(LED_PIN, true);
+    pinMode(R_LED_PIN, OUTPUT);
+    pinMode(G_LED_PIN, OUTPUT);
+    pinMode(B_LED_PIN, OUTPUT);
+    LED_COLOR(1,1,1);
     
     Serial.println("Setup RF24");
     setupRF24();
@@ -61,15 +66,16 @@ void setup()
     Serial.println("Setup MPU");
     if (!setupMPU()) {
         Serial.println("MPU6050 failed initialization");
-        digitalWrite(LED_PIN, false);
+        LED_COLOR(1,0,0);
         while (true) delay(100000);
     }
 
     Serial.println("Setup Flight Board");
     setupControl();
 
-    Serial.println("Ready");
-    digitalWrite(LED_PIN, true);
+    Serial.println("Ready in 5 seconds");
+    blinkTimeout(5, 2);
+    LED_COLOR(0,1,0);
     since = millis();
 }
 
@@ -87,10 +93,10 @@ void loop()
         //holdAt(30);
     }
     if (millis() - lastPrint > 200) {
-        //printData();
+        print();
         lastPrint = millis();
     }
-    if (millis() - lastSendRF24 > 5000) {
+    if (millis() - lastSendRF24 > 100) {
         sendSensorData();
         lastSendRF24 = millis();
     }

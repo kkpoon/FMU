@@ -1,3 +1,10 @@
+void LED_COLOR(boolean R, boolean G, boolean B)
+{
+    digitalWrite(R_LED_PIN, R);
+    digitalWrite(G_LED_PIN, G);
+    digitalWrite(B_LED_PIN, B);
+}
+
 void blinkTimeout(int seconds, int freq)
 {
     int cycle = seconds * freq * 2;
@@ -5,7 +12,7 @@ void blinkTimeout(int seconds, int freq)
 
     boolean LED_STATUS = true;
     for (int i = 0; i < cycle; i++) {
-        digitalWrite(LED_PIN, LED_STATUS);
+        LED_COLOR(LED_STATUS, LED_STATUS, LED_STATUS);
         LED_STATUS = !LED_STATUS;
         delay(timeout);
     }
