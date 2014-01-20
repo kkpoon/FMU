@@ -1,3 +1,5 @@
+
+KKMulticopterBoard  kkboard(AIL_PIN, ELE_PIN, THR_PIN, RUD_PIN);
 int throttle;
 
 void setupControl()

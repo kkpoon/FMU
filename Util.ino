@@ -1,8 +1,8 @@
 void LED_COLOR(boolean R, boolean G, boolean B)
 {
-    digitalWrite(R_LED_PIN, R);
-    digitalWrite(G_LED_PIN, G);
-    digitalWrite(B_LED_PIN, B);
+    digitalWrite(LED_R_PIN, R);
+    digitalWrite(LED_G_PIN, G);
+    digitalWrite(LED_B_PIN, B);
 }
 
 void blinkTimeout(int seconds, int freq)
