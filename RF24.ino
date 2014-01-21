@@ -35,12 +35,7 @@ void sendSensorData()
     carrier[15] = stepUp(q.z, RF24_CARRIER_SCALE_QUATERNION);
     radio.stopListening();
     boolean ok = radio.write(carrier, sizeof(carrier));
-    if (ok) {
-        Serial.println("ok");
-    } 
-    else {
-        Serial.println("fail");
-    }
+    LED(LED_B, ok);
     radio.startListening();
 }
 

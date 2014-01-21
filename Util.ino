@@ -1,3 +1,18 @@
+void LED(int16_t led, boolean value)
+{
+    switch (led) {
+        case LED_R:
+            digitalWrite(LED_R_PIN, value);
+            break;
+        case LED_G:
+            digitalWrite(LED_G_PIN, value);
+            break;
+        case LED_B:
+            digitalWrite(LED_B_PIN, value);
+            break;
+    }
+}
+
 void LED_COLOR(boolean R, boolean G, boolean B)
 {
     digitalWrite(LED_R_PIN, R);

@@ -5,6 +5,7 @@
 #include <Wire.h>
 #endif
 
+#include "VirtualWire.h"
 #include "UltraSonicProximity.h"
 #include "KKMulticopterBoard.h"
 
@@ -14,6 +15,7 @@
 #include "RF24.h"
 #include "RF24Util.h"
 
+#define RF433_TRAN_PIN  2
 #define AIL_PIN         3
 #define ELE_PIN         4
 #define THR_PIN         5
@@ -31,6 +33,10 @@
 #define MAX_DISTANCE  250
 #define MAX_PLAY_TIME 60000
 
+#define LED_R 1
+#define LED_G 2
+#define LED_B 3
+
 int         near_ground_height = 0;
 int         last_near_ground_height = 0;
 double      velocity[3];
@@ -39,6 +45,7 @@ unsigned long since = millis();
 unsigned long lastSensorRead = millis();
 unsigned long lastPrint = millis();
 unsigned long lastSendRF24 = millis();
+unsigned long lastSendRF433 = millis();
 
 void setup()
 {
@@ -57,6 +64,9 @@ void setup()
 
     Serial.println("Setup RF24");
     setupRF24();
+
+    Serial.println("Setup RF433");    
+    setupRF433();
 
     Serial.println("Setup MPU");
     if (!setupMPU()) {
@@ -93,6 +103,10 @@ void loop()
     if (millis() - lastSendRF24 > 100) {
         sendSensorData();
         lastSendRF24 = millis();
+    }
+    if (millis() - lastSendRF433 > 500) {
+        sendData433();
+        lastSendRF433 = millis();
     }
 }
 
