@@ -67,10 +67,11 @@ void readMPU()
     mpuIntStatus = mpu.getIntStatus();
     fifoCount = mpu.getFIFOCount();
     if ((mpuIntStatus & 0x10) || fifoCount == 1024) {
+        // FIFO overflow
         mpu.resetFIFO();
-        Serial.println("FIFO overflow!");
-    } 
-    else if (mpuIntStatus & 0x02) {
+        LED(LED_R, true);
+    } else if (mpuIntStatus & 0x02) {
+        LED(LED_R, false);
         while (fifoCount < packetSize) fifoCount = mpu.getFIFOCount();
         mpu.getFIFOBytes(fifoBuffer, packetSize);
         fifoCount -= packetSize;
@@ -86,3 +87,4 @@ void readMPU()
     }
     mpuTemp = (mpu.getTemperature() + 12412) / 340;
 }
+

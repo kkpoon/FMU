@@ -13,7 +13,8 @@
 #include "MPU6050_6Axis_MotionApps20.h"
 #include "nRF24L01.h"
 #include "RF24.h"
-#include "RF24Util.h"
+#include "RadioUtil.h"
+#include "RunningMedian.h"
 
 #define RF433_TRAN_PIN  2
 #define AIL_PIN         3
@@ -24,9 +25,10 @@
 #define ECHO_PIN        8
 #define RF24_CE_PIN     9
 #define RF24_CSN_PIN    10
-#define LED_B_PIN       14
-#define LED_G_PIN       15
-#define LED_R_PIN       16
+#define LED_Y_PIN       14
+#define LED_B_PIN       15
+#define LED_G_PIN       16
+#define LED_R_PIN       17
 #define MPU6050_INT_PIN 20
 
 #define ALPHA         0.5
@@ -36,6 +38,7 @@
 #define LED_R 1
 #define LED_G 2
 #define LED_B 3
+#define LED_Y 4
 
 int         near_ground_height = 0;
 int         last_near_ground_height = 0;
@@ -46,6 +49,8 @@ unsigned long lastSensorRead = millis();
 unsigned long lastPrint = millis();
 unsigned long lastSendRF24 = millis();
 unsigned long lastSendRF433 = millis();
+
+void LED_COLOR(boolean Re, boolean Gr, boolean Bl, boolean Ye = false);
 
 void setup()
 {
@@ -60,7 +65,8 @@ void setup()
     pinMode(LED_R_PIN, OUTPUT);
     pinMode(LED_G_PIN, OUTPUT);
     pinMode(LED_B_PIN, OUTPUT);
-    LED_COLOR(1,1,1);
+    pinMode(LED_Y_PIN, OUTPUT);
+    LED_COLOR(1,1,1,1);
 
     Serial.println("Setup RF24");
     setupRF24();
@@ -71,16 +77,19 @@ void setup()
     Serial.println("Setup MPU");
     if (!setupMPU()) {
         Serial.println("MPU6050 failed initialization");
-        LED_COLOR(1,0,0);
+        LED_COLOR(1,0,0,0);
         while (true) delay(100000);
     }
 
     Serial.println("Setup Flight Board");
     setupControl();
+    
+    Serial.println("Setup PM25");
+    setupPM25();
 
     Serial.println("Ready in 5 seconds");
     blinkTimeout(5, 2);
-    LED_COLOR(0,1,0);
+    LED_COLOR(0,1,0,0);
     since = millis();
 }
 
@@ -101,13 +110,15 @@ void loop()
         lastPrint = millis();
     }
     if (millis() - lastSendRF24 > 100) {
-        sendSensorData();
+        //sendRF24YPR();
+        //sendRF24PM25();
         lastSendRF24 = millis();
     }
-    if (millis() - lastSendRF433 > 500) {
-        sendData433();
+    if (millis() - lastSendRF433 > 50) {
+        sendRF433PM25();
         lastSendRF433 = millis();
     }
+    readPM25();
 }
 
 //========== Sensor data functions ==========
@@ -115,4 +126,5 @@ void readSensors() {
     readMPU();
     readUltraSound();
 }
+
 

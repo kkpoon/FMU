@@ -8,3 +8,4 @@ void estimateNearGroundVerticalVelocity() {
         velocity[2] = -343.2;
     }
 }
+

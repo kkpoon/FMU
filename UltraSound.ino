@@ -7,3 +7,4 @@ void readUltraSound()
         near_ground_height = -1;
     }
 }
+
